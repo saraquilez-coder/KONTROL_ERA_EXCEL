@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kontrol-era-v26';
+const CACHE_NAME = 'kontrol-era-v27';
 const assets = ['./', './index.html', './style.css', './script.js', './manifest.json'];
 
 self.addEventListener('install', e => {
