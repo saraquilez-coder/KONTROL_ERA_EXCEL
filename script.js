@@ -19,10 +19,6 @@ window.addEventListener('popstate', function(event) {
     }
 });
 
-window.addEventListener('beforeunload', (e) => {
-    if (intervencion) { e.preventDefault(); e.returnValue = ''; }
-});
-
 function iniciarIntervencion() {
     let n = document.getElementById('int-nom').value;
     let d = document.getElementById('int-dir').value;
@@ -49,21 +45,21 @@ function checkActiva() {
 }
 
 function finalizarTodo() {
-    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y se limpiará el panel.")) {
+    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y volverá al inicio.")) {
         let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
         historial.push({
             id: Date.now(),
-            info: intervencion,
+            info: JSON.parse(JSON.stringify(intervencion)),
             equipos: JSON.parse(JSON.stringify(eqs)),
             fecha: new Date().toLocaleString()
         });
         localStorage.setItem('bvg_historial', JSON.stringify(historial));
 
-        intervencion = null; eqs = [];
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
+        intervencion = null; eqs = [];
         
-        window.location.href = window.location.pathname;
+        window.location.href = window.location.origin + window.location.pathname;
     }
 }
 
@@ -114,24 +110,20 @@ function render() {
 
         e.alerta = e.activo && (([5,10,15,20].includes(minT) && sU > 55) || e.pA <= 50 || (e.pA <= e.pSegReg && !e.informadoRegreso));
 
-        if (e.alerta) { 
-            cV = true; 
-            if (!e.silenciado) cS = true; 
-            if (!preA) { e.silenciado = false; document.getElementById('card-'+i)?.scrollIntoView({behavior:'smooth'}); } 
-        }
-
+        if (e.alerta) { cV = true; if (!e.silenciado) cS = true; }
         if (e.activo) hJump += `<div class="btn-jump" onclick="document.getElementById('card-${i}').scrollIntoView({behavior:'smooth'})">${e.n} ${e.alerta?'⚠️':''}</div>`;
 
+        // RECONSTRUCCIÓN DE LA TARJETA CON TODOS LOS DATOS QUE FALTABAN
         let cardHtml = `
             <div id="card-${i}" class="card ${e.activo?'':'fuera'} ${e.alerta?'alerta-equipo':''}">
-                <div class="card-name">${e.n} ${e.reactivado === "SÍ" ? '<small>(R)</small>' : ''}</div>
+                <div class="card-name">${e.n} ${e.reactivado === "SÍ" ? '<small style="color:red">(R)</small>' : ''}</div>
                 <div class="n-prof-display">Nº PROF: ${e.prof.filter(p=>p!=="-").join(" | ")}</div>
                 <div class="mision-box">
                     <div><b>LOCALIZACIÓN:</b> ${e.sit.toUpperCase()}</div>
                     <div><b>OBJETIVO:</b> ${e.obj.toUpperCase()}</div>
                 </div>
                 <div class="seccion">
-                    <div class="dato"><span>Hora Entrada / Salida:</span> <span class="val">${e.hE} / ${e.hSalida}</span></div>
+                    <div class="dato"><span>Hora / Presión Entrada:</span> <span class="val">${e.hE} / ${Math.round(e.pE)} bar</span></div>
                     <div class="dato"><span>Previsión Salida (Media):</span> <span class="val destacado-verde">${e.hSMed}</span></div>
                     <div class="dato"><span>Presión Seguridad Regreso:</span> <span class="val destacado-rojo">${Math.round(e.pSegReg)} bar</span></div>
                 </div>
@@ -142,6 +134,7 @@ function render() {
                 <div class="seccion">
                     <div class="dato"><span>Consumo Medio / Inst:</span> <span class="val">${Math.round(e.rMed)} / ${Math.round(e.rInst)} l/min</span></div>
                     <div class="dato"><span>Autonomía Media:</span> <span class="val destacado-verde">${e.pA<=50?'SALIDA':(e.rMed>0?Math.round(e.autMed)+' min':'--')}</span></div>
+                    <div class="dato"><span>Última Salida:</span> <span class="val">${e.hSalida}</span></div>
                 </div>
                 ${e.activo ? `
                     <button class="btn btn-orange" onclick="showModal(${i})">ACTUALIZAR DATOS</button>
@@ -165,9 +158,8 @@ function setEstado(i, activo) {
         let ahora = Date.now();
         eqs[i].hSalida = formatHora(ahora); 
         eqs[i].tAcumuladoPrevio += (ahora - eqs[i].tI);
-        eqs[i].activo = activo;
-        eqs[i].alerta = false;
-    } else { eqs[i].activo = activo; }
+        eqs[i].activo = false;
+    }
     sync(); render(); 
 }
 
@@ -239,12 +231,12 @@ function descargarIntervencion(idx) {
     let reg = historial[idx];
     if(!reg) return;
 
-    let columnas = ["Fecha", "Intervencion", "Direccion", "Equipo", "Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "P. Entrada", "P. Final", "Consumo bar", "Consumo Medio (l/min)", "Consumo Inst (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55)", "Prevision Media", "Hora Salida", "Reactivado"];
+    let columnas = ["Fecha", "Intervencion", "Direccion", "Equipo", "Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "P. Entrada", "P. Final", "Consumo bar", "Consumo Medio (l/min)", "Consumo Inst (l/min)", "Tiempo Trabajo Total", "Hora Salida", "Reactivado"];
     let csvContent = columnas.join(";") + "\n";
 
     reg.equipos.forEach(e => {
         let fila = [
-            reg.fecha, reg.info.nombre.replace(/;/g, ","), reg.info.direccion.replace(/;/g, ","), e.n.replace(/;/g, ","), e.prof.filter(p => p !== "-").join("/"), e.sit.replace(/;/g, ","), e.obj.replace(/;/g, ","), e.hE, e.pE, e.pA, (e.pE - e.pA), Math.round(e.rMed), Math.round(e.rInst), formatTimeMS(e.tAcumuladoPrevio), e.hS55, e.hSMed, e.hSalida, e.reactivado
+            reg.fecha, reg.info.nombre.replace(/;/g, ","), reg.info.direccion.replace(/;/g, ","), e.n.replace(/;/g, ","), e.prof.filter(p => p !== "-").join("/"), e.sit.replace(/;/g, ","), e.obj.replace(/;/g, ","), e.hE, e.pE, e.pA, (e.pE - e.pA), Math.round(e.rMed), Math.round(e.rInst), formatTimeMS(e.tAcumuladoPrevio), e.hSalida, e.reactivado
         ].join(";");
         csvContent += fila + "\n";
     });
