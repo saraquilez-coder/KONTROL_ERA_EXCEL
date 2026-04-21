@@ -49,21 +49,23 @@ function checkActiva() {
 }
 
 function finalizarTodo() {
-    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y se limpiará el panel.")) {
+    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y volverá al inicio.")) {
         let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
+        
+        // Guardamos la intervención y el array de equipos completo como un solo bloque
         historial.push({
             id: Date.now(),
-            info: intervencion,
+            info: JSON.parse(JSON.stringify(intervencion)),
             equipos: JSON.parse(JSON.stringify(eqs)),
             fecha: new Date().toLocaleString()
         });
         localStorage.setItem('bvg_historial', JSON.stringify(historial));
 
-        intervencion = null; eqs = [];
+        // Limpieza y redirección al inicio
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
-        
-        window.location.href = window.location.pathname;
+        intervencion = null; eqs = [];
+        window.location.href = window.location.origin + window.location.pathname;
     }
 }
 
@@ -261,14 +263,15 @@ function renderHistorial() {
     historial.slice().reverse().forEach((reg, index) => {
         let originalIdx = historial.length - 1 - index;
         html += `
-            <div style="background:white; padding:10px; margin-bottom:10px; color:black; border-radius:5px; border-left:5px solid #d32f2f;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div><b>${reg.fecha}</b><br>${reg.info.nombre.toUpperCase()}</div>
-                    <button class="btn btn-blue" style="width:auto; padding:5px 10px; font-size:0.7rem;" onclick="descargarIntervencion(${originalIdx})">EXCEL</button>
+            <div style="background:white; padding:10px; margin-bottom:10px; color:black; border-radius:5px; border-left:5px solid #d32f2f; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <b style="font-size:0.9rem;">${reg.fecha}</b><br>
+                    <span style="font-size:0.8rem;">${reg.info.nombre.toUpperCase()}</span>
                 </div>
+                <button class="btn btn-blue" style="width:auto; padding:5px 10px; font-size:0.7rem; margin:0;" onclick="descargarIntervencion(${originalIdx})">EXCEL</button>
             </div>`;
     });
-    document.getElementById('lista-historial').innerHTML = html || "No hay datos.";
+    document.getElementById('lista-historial').innerHTML = html || "No hay intervenciones guardadas.";
 }
 
 function descargarIntervencion(idx) {
@@ -276,12 +279,22 @@ function descargarIntervencion(idx) {
     let reg = historial[idx];
     if(!reg) return;
 
-    let columnas = ["Fecha", "Intervencion", "Direccion", "Equipo", "Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "P. Entrada", "P. Final", "Consumo bar", "Consumo Medio (l/min)", "Consumo Inst (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55)", "Prevision Media", "Hora Salida", "Reactivado"];
+    let columnas = ["Fecha Registro", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Instantáneo (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55 l/min)", "Prevision Salida (Media)", "Hora Salida"];
     let csvContent = columnas.join(";") + "\n";
 
     reg.equipos.forEach(e => {
         let fila = [
-            reg.fecha, reg.info.nombre.replace(/;/g, ","), reg.info.direccion.replace(/;/g, ","), e.n.replace(/;/g, ","), e.prof.filter(p => p !== "-").join("/"), e.sit.replace(/;/g, ","), e.obj.replace(/;/g, ","), e.hE, e.pE, e.pA, (e.pE - e.pA), Math.round(e.rMed), Math.round(e.rInst), formatTimeMS(e.tAcumuladoPrevio), e.hS55, e.hSMed, e.hSalida, e.reactivado
+            reg.fecha,
+            reg.info.nombre.replace(/;/g, ","),
+            reg.info.direccion.replace(/;/g, ","),
+            e.n.replace(/;/g, ","),
+            e.prof.filter(p => p !== "-").join(" / "),
+            e.sit.replace(/;/g, ","),
+            e.obj.replace(/;/g, ","),
+            e.hE, e.pE, e.pA, (e.pE - e.pA),
+            Math.round(e.rMed), Math.round(e.rInst),
+            formatTimeMS(e.tAcumuladoPrevio),
+            e.hS55, e.hSMed, e.hSalida
         ].join(";");
         csvContent += fila + "\n";
     });
