@@ -50,24 +50,13 @@ function checkActiva() {
 }
 
 function finalizarTodo() {
-    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y se limpiará el panel.")) {
-        // 1. Guardar la intervención completa como un único bloque
-        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
-        historial.push({
-            id: Date.now(),
-            info: intervencion,
-            equipos: JSON.parse(JSON.stringify(eqs)),
-            fecha: new Date().toLocaleString()
-        });
-        localStorage.setItem('bvg_historial', JSON.stringify(historial));
-
-        // 2. Limpiar datos activos
+    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se limpiará todo el panel.")) {
         intervencion = null; eqs = [];
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
         
-        // 3. Retorno al inicio (reseteo fiable de PWA)
-        window.location.href = window.location.pathname;
+        // Corrección: Recarga la página para volver al inicio
+        location.reload(); 
     }
 }
 
@@ -160,7 +149,15 @@ function setEstado(i, activo) {
         eqs[i].hSalida = formatHora(ahora); 
         eqs[i].tAcumuladoPrevio += (ahora - eqs[i].tI);
         eqs[i].activo = activo;
-        eqs[i].alerta = false;
+
+        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
+        historial.push({
+            id: Date.now(),
+            info: intervencion,
+            equipos: [JSON.parse(JSON.stringify(eqs[i]))],
+            fecha: new Date().toLocaleString()
+        });
+        localStorage.setItem('bvg_historial', JSON.stringify(historial));
     } else {
         eqs[i].activo = activo;
     }
@@ -218,64 +215,56 @@ function toggleHistorial() {
 function renderHistorial() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
     let html = "";
-    // Se muestra de más reciente a más antiguo
-    historial.slice().reverse().forEach((reg, index) => {
-        let idxReverso = historial.length - 1 - index;
-        html += `
-            <div style="background:white; padding:10px; margin-bottom:10px; color:black; border-radius:5px; border-left:5px solid #d32f2f;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <b>${reg.fecha}</b><br>
-                        ${reg.info.nombre.toUpperCase()}
-                    </div>
-                    <button class="btn btn-blue" style="width:auto; padding:5px 10px; font-size:0.7rem;" onclick="descargarIntervencion(${idxReverso})">EXCEL</button>
-                </div>
-            </div>`;
+    historial.slice().reverse().forEach(reg => {
+        html += `<div style="background:white; padding:5px; margin-bottom:5px; color:black; font-size:0.8rem;"><b>${reg.fecha}</b> - ${reg.info.nombre.toUpperCase()}</div>`;
     });
-    document.getElementById('lista-historial').innerHTML = html || "No hay intervenciones guardadas.";
+    document.getElementById('lista-historial').innerHTML = html || "No hay datos.";
 }
 
-function descargarIntervencion(idx) {
+function exportarTodoCSV() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
-    let reg = historial[idx];
-    if(!reg) return;
+    if(historial.length === 0) return alert("No hay datos para exportar");
 
-    let columnas = ["Fecha", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Instantáneo (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55 l/min)", "Prevision Salida (Media)", "Hora Salida"];
+    let columnas = ["Fecha Registro", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Instantáneo (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55 l/min)", "Prevision Salida (Media)", "Hora Salida"];
     
     let csvContent = columnas.join(";") + "\n";
 
-    reg.equipos.forEach(e => {
-        let consumoBar = e.pE - e.pA;
-        let profesionales = e.prof.filter(p => p !== "-").join(" / ");
+    historial.forEach(reg => {
+        reg.equipos.forEach(e => {
+            let consumoBar = e.pE - e.pA;
+            let profesionales = e.prof.filter(p => p !== "-").join(" / ");
 
-        let fila = [
-            reg.fecha,
-            reg.info.nombre.replace(/;/g, ","),
-            reg.info.direccion.replace(/;/g, ","),
-            e.n.replace(/;/g, ","),
-            profesionales,
-            e.sit.replace(/;/g, ","),
-            e.obj.replace(/;/g, ","),
-            e.hE,
-            e.pE,
-            e.pA,
-            consumoBar,
-            Math.round(e.rMed),
-            Math.round(e.rInst),
-            formatTimeMS(e.tAcumuladoPrevio),
-            e.hS55,
-            e.hSMed,
-            e.hSalida
-        ].join(";");
-        csvContent += fila + "\n";
+            let fila = [
+                reg.fecha,
+                reg.info.nombre.replace(/;/g, ","),
+                reg.info.direccion.replace(/;/g, ","),
+                e.n.replace(/;/g, ","),
+                profesionales,
+                e.sit.replace(/;/g, ","),
+                e.obj.replace(/;/g, ","),
+                e.hE,
+                e.pE,
+                e.pA,
+                consumoBar,
+                Math.round(e.rMed),
+                Math.round(e.rInst),
+                formatTimeMS(e.tAcumuladoPrevio),
+                e.hS55,
+                e.hSMed,
+                e.hSalida
+            ].join(";");
+            csvContent += fila + "\n";
+        });
     });
 
     let BOM = "\uFEFF";
     let blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     let url = URL.createObjectURL(blob);
     let link = document.createElement("a");
+    let f = new Date();
+    let fechaStr = `${f.getFullYear()}${f.getMonth()+1}${f.getDate()}_${f.getHours()}${f.getMinutes()}`;
     link.setAttribute("href", url);
-    link.setAttribute("download", `KONTROL_ERA_${reg.info.nombre.replace(/ /g, "_")}.csv`);
+    link.setAttribute("download", `PARTE_INTERVENCION_${fechaStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
