@@ -59,6 +59,7 @@ function finalizarTodo() {
         localStorage.removeItem('eq_bvg_timer_fix');
         intervencion = null; eqs = [];
         
+        // Regresa a la pantalla inicial recargando la ruta limpia
         window.location.href = window.location.origin + window.location.pathname;
     }
 }
@@ -91,7 +92,7 @@ function addEquipo() {
         hE: formatHora(ah), hS55: formatHora(ah + (((barNum-50)*6/55)*60000)), hSMed: "--:--", hSalida: "--:--",
         pSegReg: Math.round((barNum / 2) + 25),
         tI: ah, tU: ah, hUltActualizacion: formatHora(ah),
-        tAcumuladoPrevio: 0, rMed: 0, rInst: 0, autMed: 0, activo: true, alerta: false, silenciado: false, informadoRegreso: false, reactivado: "NO"
+        tAcumuladoPrevio: 0, rMed: 0, rInst: 0, autMed: 0, activo: true, alerta: false, silenciado: false, informadoRegreso: false
     });
     sync(); render();
     ["nom","bar","np1","np2","np3","sit","obj"].forEach(id => document.getElementById(id).value="");
@@ -111,12 +112,11 @@ function render() {
         e.alerta = e.activo && (([5,10,15,20].includes(minT) && sU > 55) || e.pA <= 50 || (e.pA <= e.pSegReg && !e.informadoRegreso));
 
         if (e.alerta) { cV = true; if (!e.silenciado) cS = true; }
-        if (e.activo) hJump += `<div class="btn-jump" onclick="document.getElementById('card-${i}').scrollIntoView({behavior:'smooth'})">${e.n} ${e.alerta?'⚠️':''}</div>`;
+        if (e.activo) hJump += `<div class="btn-jump" onclick="document.getElementById('card-${i}').scrollIntoView({behavior:'smooth'})">${e.n}</div>`;
 
-        // RECONSTRUCCIÓN DE LA TARJETA CON TODOS LOS DATOS QUE FALTABAN
         let cardHtml = `
             <div id="card-${i}" class="card ${e.activo?'':'fuera'} ${e.alerta?'alerta-equipo':''}">
-                <div class="card-name">${e.n} ${e.reactivado === "SÍ" ? '<small style="color:red">(R)</small>' : ''}</div>
+                <div class="card-name">${e.n}</div>
                 <div class="n-prof-display">Nº PROF: ${e.prof.filter(p=>p!=="-").join(" | ")}</div>
                 <div class="mision-box">
                     <div><b>LOCALIZACIÓN:</b> ${e.sit.toUpperCase()}</div>
@@ -134,7 +134,7 @@ function render() {
                 <div class="seccion">
                     <div class="dato"><span>Consumo Medio / Inst:</span> <span class="val">${Math.round(e.rMed)} / ${Math.round(e.rInst)} l/min</span></div>
                     <div class="dato"><span>Autonomía Media:</span> <span class="val destacado-verde">${e.pA<=50?'SALIDA':(e.rMed>0?Math.round(e.autMed)+' min':'--')}</span></div>
-                    <div class="dato"><span>Última Salida:</span> <span class="val">${e.hSalida}</span></div>
+                    <div class="dato"><span>Hora Salida:</span> <span class="val">${e.hSalida}</span></div>
                 </div>
                 ${e.activo ? `
                     <button class="btn btn-orange" onclick="showModal(${i})">ACTUALIZAR DATOS</button>
@@ -167,7 +167,7 @@ function reactivarEquipo(i) {
     let b = prompt(`Bares Entrada:`, Math.round(eqs[i].pA));
     if(b) {
         let ah = Date.now(); eqs[i].pE = eqs[i].pA = parseInt(b); eqs[i].tI = ah; eqs[i].tU = ah; eqs[i].hE = formatHora(ah);
-        eqs[i].hSalida = "--:--"; eqs[i].activo = true; eqs[i].reactivado = "SÍ"; sync(); render();
+        eqs[i].hSalida = "--:--"; eqs[i].activo = true; sync(); render();
     }
 }
 
@@ -231,12 +231,13 @@ function descargarIntervencion(idx) {
     let reg = historial[idx];
     if(!reg) return;
 
-    let columnas = ["Fecha", "Intervencion", "Direccion", "Equipo", "Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "P. Entrada", "P. Final", "Consumo bar", "Consumo Medio (l/min)", "Consumo Inst (l/min)", "Tiempo Trabajo Total", "Hora Salida", "Reactivado"];
+    let columnas = ["Fecha Registro", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Inst (l/min)", "Tiempo Trabajo Total", "Hora Salida"];
     let csvContent = columnas.join(";") + "\n";
 
     reg.equipos.forEach(e => {
+        let profs = e.prof.filter(p => p !== "-").join("/");
         let fila = [
-            reg.fecha, reg.info.nombre.replace(/;/g, ","), reg.info.direccion.replace(/;/g, ","), e.n.replace(/;/g, ","), e.prof.filter(p => p !== "-").join("/"), e.sit.replace(/;/g, ","), e.obj.replace(/;/g, ","), e.hE, e.pE, e.pA, (e.pE - e.pA), Math.round(e.rMed), Math.round(e.rInst), formatTimeMS(e.tAcumuladoPrevio), e.hSalida, e.reactivado
+            reg.fecha, reg.info.nombre.replace(/;/g, ","), reg.info.direccion.replace(/;/g, ","), e.n.replace(/;/g, ","), profs, e.sit.replace(/;/g, ","), e.obj.replace(/;/g, ","), e.hE, e.pE, e.pA, (e.pE - e.pA), Math.round(e.rMed), Math.round(e.rInst), formatTimeMS(e.tAcumuladoPrevio), e.hSalida
         ].join(";");
         csvContent += fila + "\n";
     });
