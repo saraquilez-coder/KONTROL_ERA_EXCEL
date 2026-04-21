@@ -20,6 +20,10 @@ window.addEventListener('popstate', function(event) {
     }
 });
 
+window.addEventListener('beforeunload', (e) => {
+    if (intervencion) { e.preventDefault(); e.returnValue = ''; }
+});
+
 function iniciarIntervencion() {
     let n = document.getElementById('int-nom').value;
     let d = document.getElementById('int-dir').value;
@@ -46,7 +50,7 @@ function checkActiva() {
 }
 
 function finalizarTodo() {
-    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se limpiará el panel. Asegúrate de haber exportado si lo necesitas.")) {
+    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se limpiará todo el panel. Los datos ya están en el historial.")) {
         intervencion = null; eqs = [];
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
@@ -108,24 +112,44 @@ function render() {
         if (e.alerta) { 
             cV = true; 
             if (!e.silenciado) cS = true; 
-            if (!preA) { e.silenciado = false; } 
+            if (!preA) { e.silenciado = false; document.getElementById('card-'+i)?.scrollIntoView({behavior:'smooth'}); } 
         }
 
         if (e.activo) hJump += `<div class="btn-jump" onclick="document.getElementById('card-${i}').scrollIntoView({behavior:'smooth'})">${e.n} ${e.alerta?'⚠️':''}</div>`;
 
+        let msgDisplay = "¡REVISIÓN REQUERIDA!";
+        if (alertaMinutos) msgDisplay = `ACTUALIZACIÓN DE PRESIÓN ${minT} MINUTOS TRABAJO`;
+        if (avisoRegreso) msgDisplay = "¡AVISO! PRESIÓN DE REGRESO ALCANZADA (INFORMAR EQUIPO)";
+        if (e.pA <= 50) msgDisplay = "¡ALERTA! EQUIPO EN RESERVA - SALIDA INMEDIATA";
+
         let cardHtml = `
             <div id="card-${i}" class="card ${e.activo?'':'fuera'} ${e.alerta?'alerta-equipo':''}">
-                <div class="card-name">${e.n} ${e.reactivado === "SÍ" ? '<small>(R)</small>' : ''}</div>
+                <div class="msg-alerta">${msgDisplay}</div>
+                <div class="card-name">${e.n} ${e.reactivado === "SÍ" ? '<small style="font-size:0.8rem; color:#d32f2f;">(REACTIVADO)</small>' : ''}</div>
+                <div class="n-prof-display">Nº PROF: ${e.prof.filter(p=>p!=="-").join(" | ")}</div>
+                <div class="mision-box">
+                    <div><b>LOCALIZACIÓN:</b> ${e.sit.toUpperCase()}</div>
+                    <div><b>OBJETIVO:</b> ${e.obj.toUpperCase()}</div>
+                </div>
                 <div class="seccion">
-                    <div class="dato"><span>Entrada:</span> <span class="val">${e.hE} (${e.pE} bar)</span></div>
-                    <div class="dato"><span>Salida:</span> <span class="val">${e.hSalida}</span></div>
-                    <div class="dato"><span>Presión Actual:</span> <span class="val">${e.pA} bar</span></div>
+                    <div class="dato"><span>Hora Entrada / Salida:</span> <span class="val">${e.hE} / ${e.hSalida}</span></div>
+                    <div class="dato"><span>Presión Entrada / Seguridad:</span> <span class="val">${Math.round(e.pE)} bar / ${Math.round(e.pSegReg)} bar</span></div>
+                </div>
+                <div class="seccion">
+                    <div class="dato"><span>Presión Actual:</span> <span class="val destacado-azul">${Math.round(e.pA)} bar</span></div>
+                    <div class="dato"><span>Tiempo Trabajo Tramo:</span> <span class="val destacado-rojo">${formatTimeMS(e.activo ? (ah - e.tI) : (e.tAcumuladoPrevio))}</span></div>
+                    <div class="dato"><span>Última Actualización:</span> <span class="val">${e.activo ? e.hUltActualizacion : 'PARADO'}</span></div>
+                </div>
+                <div class="seccion">
+                    <div class="dato"><span>Consumo Medio:</span> <span class="val">${Math.round(e.rMed)} l/min</span></div>
+                    <div class="dato"><span>Autonomía Media:</span> <span class="val destacado-verde">${e.pA<=50?'SALIDA':(e.rMed>0?Math.round(e.autMed)+' min':'--')}</span></div>
                 </div>
                 ${e.activo ? `
-                    <button class="btn btn-orange" onclick="showModal(${i})">ACTUALIZAR</button>
+                    <button class="btn btn-orange" onclick="showModal(${i})">ACTUALIZAR DATOS</button>
+                    ${e.alerta ? `<button class="btn btn-silence" onclick="eqs[${i}].silenciado=true;render();">SILENCIAR ALARMA</button>` : ''}
                     <button class="btn btn-dark" onclick="setEstado(${i}, false)">FIN EQUIPO (SALIDA)</button>
                 ` : `
-                    <button class="btn btn-blue" style="background:#28a745" onclick="reactivarEquipo(${i})">REACTIVAR</button>
+                    <button class="btn btn-blue" style="background:#28a745" onclick="reactivarEquipo(${i})">RE-ACTIVAR (NUEVA MISIÓN)</button>
                 `}
             </div>`;
         if(e.activo) hZ += cardHtml; else hF += cardHtml;
@@ -133,11 +157,9 @@ function render() {
 
     document.getElementById('quick-access').innerHTML = hJump;
     document.getElementById('L_ZONA').innerHTML = hZ;
-    document.getElementById('L_FUERA').innerHTML = hF != "" ? '<div class="separador">FUERA DE ZONA</div>' + hF : "";
-    
+    document.getElementById('L_FUERA').innerHTML = hF != "" ? '<div class="separador">EQUIPOS FUERA DE ZONA</div>' + hF : "";
     let tB = document.getElementById('timer-box');
-    if (cV) { tB.className = 'global-alerta'; tB.innerText = '¡CONTROL!'; if (cS && ah % 2000 < 1000) playAlertSound(); } 
-    else { tB.className = ''; tB.innerText = ''; }
+    if (cV) { tB.className = 'global-alerta'; tB.innerText = '¡CONTROL PENDIENTE!'; if (cS && ah % 2000 < 1000) playAlertSound(); } else { tB.className = ''; tB.innerText = ''; }
 }
 
 function setEstado(i, activo) { 
@@ -146,12 +168,12 @@ function setEstado(i, activo) {
         eqs[i].hSalida = formatHora(ah);
         eqs[i].activo = false;
         
-        // GUARDAR TRAMO EN EL HISTORIAL AL FINALIZAR
+        // Guardar automáticamente este tramo en el historial
         let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
         historial.push({
             id: Date.now(),
             info: intervencion,
-            equipo_tramo: JSON.parse(JSON.stringify(eqs[i])),
+            equipo_foto: JSON.parse(JSON.stringify(eqs[i])),
             fecha: new Date().toLocaleString()
         });
         localStorage.setItem('bvg_historial', JSON.stringify(historial));
@@ -160,16 +182,22 @@ function setEstado(i, activo) {
 }
 
 function reactivarEquipo(i) {
-    let b = prompt(`Nueva Presión de Entrada para ${eqs[i].n}:`, eqs[i].pA);
+    let b = prompt(`Bares Entrada para nueva misión:`, Math.round(eqs[i].pA));
     if(b) {
         let ah = Date.now();
-        eqs[i].pE = eqs[i].pA = parseInt(b);
+        eqs[i].pE = eqs[i].pA = parseInt(b); 
+        eqs[i].tI = ah; 
+        eqs[i].tU = ah; 
         eqs[i].hE = formatHora(ah);
         eqs[i].hSalida = "--:--";
-        eqs[i].tI = ah;
-        eqs[i].tU = ah;
-        eqs[i].activo = true;
-        eqs[i].reactivado = "SÍ";
+        eqs[i].hUltActualizacion = formatHora(ah);
+        eqs[i].pSegReg = Math.round((parseInt(b) / 2) + 25);
+        eqs[i].activo = true; 
+        eqs[i].alerta = false; 
+        eqs[i].silenciado = false; 
+        eqs[i].informadoRegreso = false;
+        eqs[i].reactivado = "SÍ"; 
+        eqs[i].hS55 = formatHora(ah + (((parseInt(b)-50)*6/55)*60000)); 
         sync(); render();
     }
 }
@@ -180,6 +208,9 @@ function showModal(i) {
     document.getElementById('nB').value=Math.round(eqs[i].pA); 
     document.getElementById('nSit').value=eqs[i].sit; 
     document.getElementById('nObj').value=eqs[i].obj;
+    let alertaReg = eqs[i].pA <= eqs[i].pSegReg;
+    document.getElementById('alerta-check-container').style.display = alertaReg ? 'block' : 'none';
+    document.getElementById('checkInformado').checked = eqs[i].informadoRegreso;
     document.getElementById('modal').style.display='flex'; 
 }
 
@@ -189,6 +220,8 @@ function saveData() {
     let b = document.getElementById('nB').value;
     if(b && idS != -1) {
         let ah = Date.now(); let v = parseInt(b);
+        eqs[idS].informadoRegreso = document.getElementById('checkInformado').checked;
+        if(eqs[idS].informadoRegreso) eqs[idS].silenciado = true;
         if (v !== eqs[idS].pA) {
             let tMin = (ah - eqs[idS].tI) / 60000;
             if(tMin > 0.1) {
@@ -199,6 +232,7 @@ function saveData() {
             eqs[idS].rInst = ((eqs[idS].pA - v) * 6) / ((ah - eqs[idS].tU) / 60000);
             eqs[idS].tU = ah; eqs[idS].hUltActualizacion = formatHora(ah); eqs[idS].pA = v;
         }
+        if(v > eqs[idS].pSegReg) { eqs[idS].informadoRegreso = false; eqs[idS].silenciado = false; }
         eqs[idS].sit = document.getElementById('nSit').value; 
         eqs[idS].obj = document.getElementById('nObj').value;
         hideModal(); sync(); render();
@@ -217,49 +251,63 @@ function renderHistorial() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
     let html = "";
     historial.slice().reverse().forEach(reg => {
-        let e = reg.equipo_tramo;
-        html += `<div style="background:white; padding:5px; margin-bottom:5px; border-left:4px solid red; font-size:0.8rem; color:black;">
-            <b>${e.n}</b> (${e.hE} - ${e.hSalida}) | Reactivado: ${e.reactivado}
-        </div>`;
+        let e = reg.equipo_foto;
+        html += `
+            <div style="background:white; padding:10px; margin-bottom:5px; border-left:5px solid red; font-size:0.8rem; color:#000;">
+                <b>${reg.fecha}</b> - ${e.n} [ENTRADA: ${e.hE} / SALIDA: ${e.hSalida}]<br>
+                OBJETIVO: ${e.obj} / REACTIVADO: ${e.reactivado}
+            </div>
+        `;
     });
-    document.getElementById('lista-historial').innerHTML = html || "No hay datos.";
+    document.getElementById('lista-historial').innerHTML = html || "No hay registros.";
 }
 
 function exportarTodoCSV() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
     if(historial.length === 0) return alert("No hay datos para exportar");
 
-    // Cabecera con las nuevas columnas
     let columnas = [
-        "Fecha", "Intervencion", "Equipo", "Profesionales", "Localizacion", 
-        "Objetivo", "P. Entrada", "P. Salida", "Hora Entrada", "Hora Salida", "Reactivado"
+        "Fecha Registro", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", 
+        "Localizacion", "Objetivo", "Hora Entrada", "Hora Salida", "Presion Entrada (bar)", 
+        "Presion Salida (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", 
+        "Tiempo Trabajo Tramo", "Reactivado"
     ];
-    let csvContent = "\uFEFF" + columnas.join(";") + "\n";
+
+    let csvContent = columnas.join(";") + "\n";
 
     historial.forEach(reg => {
-        let e = reg.equipo_tramo;
-        let profs = e.prof.filter(p => p !== "-").join("/");
+        let e = reg.equipo_foto;
+        let consumoBar = e.pE - e.pA;
+        let profesionales = e.prof.filter(p => p !== "-").join(" / ");
+
         let fila = [
             reg.fecha,
-            reg.info.nombre,
-            e.n,
-            profs,
-            e.sit,
-            e.obj,
-            e.pE,
-            e.pA,
+            reg.info.nombre.replace(/;/g, ","),
+            reg.info.direccion.replace(/;/g, ","),
+            e.n.replace(/;/g, ","),
+            profesionales,
+            e.sit.replace(/;/g, ","),
+            e.obj.replace(/;/g, ","),
             e.hE,
             e.hSalida,
+            e.pE,
+            e.pA,
+            consumoBar,
+            Math.round(e.rMed),
+            formatTimeMS(reg.id - e.tI),
             e.reactivado
         ].join(";");
         csvContent += fila + "\n";
     });
 
-    let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    let BOM = "\uFEFF";
+    let blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     let url = URL.createObjectURL(blob);
     let link = document.createElement("a");
+    let f = new Date();
+    let fechaStr = `${f.getFullYear()}${f.getMonth()+1}${f.getDate()}_${f.getHours()}${f.getMinutes()}`;
     link.setAttribute("href", url);
-    link.setAttribute("download", `Intervencion_${Date.now()}.csv`);
+    link.setAttribute("download", `PARTE_INTERVENCION_${fechaStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -267,3 +315,5 @@ function exportarTodoCSV() {
 
 setInterval(render, 1000);
 window.onload = checkActiva;
+window.addEventListener('click', initAudio, { once: true });
+window.addEventListener('touchstart', initAudio, { once: true });
