@@ -170,39 +170,49 @@ function setEstado(i, activo) {
         let ahora = Date.now();
         eqs[i].hSalida = formatHora(ahora); 
         eqs[i].tAcumuladoPrevio += (ahora - eqs[i].tI);
-        eqs[i].activo = activo;
-        eqs[i].alerta = false;
-    } else { eqs[i].activo = activo; }
+        eqs[i].activo = false;
+        
+        // Guardamos la fila al finalizar el equipo
+        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
+        historial.push({
+            id: Date.now(),
+            info: JSON.parse(JSON.stringify(intervencion)),
+            equipos: [JSON.parse(JSON.stringify(eqs[i]))],
+            fecha: new Date().toLocaleString()
+        });
+        localStorage.setItem('bvg_historial', JSON.stringify(historial));
+    }
     sync(); render(); 
 }
 
 function reactivarEquipo(i) {
     let b = prompt(`Bares Entrada para nueva misión de ${eqs[i].n}:`, Math.round(eqs[i].pA));
     if(b) {
-        // PRIMERO: Guardamos el tramo que acaba de terminar en el historial
-        // para que sea una fila independiente en el Excel
+        // PRIMERO: Antes de resetear, enviamos el tramo actual al historial
         let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
         historial.push({
             id: Date.now(),
             info: JSON.parse(JSON.stringify(intervencion)),
-            equipos: [JSON.parse(JSON.stringify(eqs[i]))], // Guardamos solo este equipo/tramo
+            equipos: [JSON.parse(JSON.stringify(eqs[i]))], // Guardamos el tramo que acaba de terminar
             fecha: new Date().toLocaleString()
         });
         localStorage.setItem('bvg_historial', JSON.stringify(historial));
 
-        // SEGUNDO: Reiniciamos el equipo para la nueva entrada
+        // SEGUNDO: Reiniciamos el equipo para la nueva entrada (nueva fila)
         let ah = Date.now();
         eqs[i].pE = eqs[i].pA = parseInt(b);
         eqs[i].tI = ah;
         eqs[i].tU = ah;
         eqs[i].hE = formatHora(ah);
         eqs[i].hSalida = "--:--";
-        eqs[i].tAcumuladoPrevio = 0; // Reiniciamos tiempo para el nuevo tramo
+        eqs[i].tAcumuladoPrevio = 0; // Reiniciamos cronómetro para el nuevo tramo
         eqs[i].activo = true;
+        eqs[i].reactivado = "SÍ"; 
         
         sync(); 
         render();
     }
+
 
 }
 
