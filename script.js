@@ -170,7 +170,7 @@ function render() {
 function setEstado(i, activo) { 
     if (!activo) {
         let ahora = Date.now();
-        eqs[i].hSalida = formatHora(ahora); // Capturamos la hora al hacer click en FIN EQUIPO
+        eqs[i].hSalida = formatHora(ahora); // Capturamos la hora al hacer click en FIN EQUIPO (SALIDA)
         eqs[i].tAcumuladoPrevio += (ahora - eqs[i].tI);
         eqs[i].activo = activo;
         eqs[i].alerta = false;
@@ -180,7 +180,7 @@ function setEstado(i, activo) {
         let registro = {
             id: Date.now(),
             info: intervencion,
-            equipos: [JSON.parse(JSON.stringify(eqs[i]))], // Guardamos solo la foto de este equipo al salir
+            equipos: [JSON.parse(JSON.stringify(eqs[i]))], // Guardamos la foto de este equipo al salir
             fecha: new Date().toLocaleString()
         };
         historial.push(registro);
@@ -294,7 +294,7 @@ function exportarTodoCSV() {
         "Tiempo Trabajo Total",
         "Prevision Salida (55 l/min)",
         "Prevision Salida (Media)",
-        "Hora Salida" // Nueva Columna
+        "Hora Salida" // Nueva Columna Final añadida
     ];
 
     let csvContent = columnas.join(";") + "\n";
@@ -322,7 +322,7 @@ function exportarTodoCSV() {
                 tiempoTotal,
                 e.hS55,
                 e.hSMed,
-                e.hSalida // Dato de la hora de salida
+                e.hSalida // Dato exportado de la hora de salida
             ].join(";");
             csvContent += fila + "\n";
         });
