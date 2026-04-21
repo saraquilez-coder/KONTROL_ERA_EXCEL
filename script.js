@@ -177,11 +177,33 @@ function setEstado(i, activo) {
 }
 
 function reactivarEquipo(i) {
-    let b = prompt(`Bares Entrada:`, Math.round(eqs[i].pA));
+    let b = prompt(`Bares Entrada para nueva misión de ${eqs[i].n}:`, Math.round(eqs[i].pA));
     if(b) {
-        let ah = Date.now(); eqs[i].pE = eqs[i].pA = parseInt(b); eqs[i].tI = ah; eqs[i].tU = ah; eqs[i].hE = formatHora(ah);
-        eqs[i].hSalida = "--:--"; eqs[i].activo = true; eqs[i].reactivado = "SÍ"; sync(); render();
+        // PRIMERO: Guardamos el tramo que acaba de terminar en el historial
+        // para que sea una fila independiente en el Excel
+        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
+        historial.push({
+            id: Date.now(),
+            info: JSON.parse(JSON.stringify(intervencion)),
+            equipos: [JSON.parse(JSON.stringify(eqs[i]))], // Guardamos solo este equipo/tramo
+            fecha: new Date().toLocaleString()
+        });
+        localStorage.setItem('bvg_historial', JSON.stringify(historial));
+
+        // SEGUNDO: Reiniciamos el equipo para la nueva entrada
+        let ah = Date.now();
+        eqs[i].pE = eqs[i].pA = parseInt(b);
+        eqs[i].tI = ah;
+        eqs[i].tU = ah;
+        eqs[i].hE = formatHora(ah);
+        eqs[i].hSalida = "--:--";
+        eqs[i].tAcumuladoPrevio = 0; // Reiniciamos tiempo para el nuevo tramo
+        eqs[i].activo = true;
+        
+        sync(); 
+        render();
     }
+
 }
 
 function showModal(i) { 
