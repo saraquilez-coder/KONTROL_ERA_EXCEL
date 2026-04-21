@@ -114,7 +114,14 @@ function render() {
         let sU = Math.floor((ah - e.tU)/1000); 
         let preA = e.alerta;
 
-        e.alerta = e.activo && (([5,10,15,20].includes(minT) && sU > 55) || e.pA <= 50 || (e.pA <= e.pSegReg && !e.informadoRegreso));
+        // --- BLOQUE DE ALERTAS (Lo que te faltaba) ---
+        let alertaMinutos = [5, 10, 15, 20].includes(minT) && sU > 55;
+        let alertaReserva = e.pA <= 50;
+        let alertaSeguridad = e.pA <= e.pSegReg && !e.informadoRegreso;
+
+        // Si cualquiera de estas se cumple, la tarjeta se pone roja
+        e.alerta = e.activo && (alertaMinutos || alertaReserva || alertaSeguridad);
+        // ---------------------------------------------
 
         if (e.alerta) { 
             cV = true; 
