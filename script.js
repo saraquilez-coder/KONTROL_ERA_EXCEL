@@ -51,7 +51,7 @@ function checkActiva() {
 
 function finalizarTodo() {
     if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y se limpiará el panel.")) {
-        // Guardamos la intervención completa antes de borrar
+        // 1. Guardar la intervención completa como un único bloque
         let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
         historial.push({
             id: Date.now(),
@@ -61,13 +61,12 @@ function finalizarTodo() {
         });
         localStorage.setItem('bvg_historial', JSON.stringify(historial));
 
-        // Limpieza
-        intervencion = null; 
-        eqs = [];
+        // 2. Limpiar datos activos
+        intervencion = null; eqs = [];
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
         
-        // Retorno al inicio
+        // 3. Retorno al inicio (reseteo fiable de PWA)
         window.location.href = window.location.pathname;
     }
 }
@@ -219,7 +218,9 @@ function toggleHistorial() {
 function renderHistorial() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
     let html = "";
-    historial.slice().reverse().forEach((reg, idx) => {
+    // Se muestra de más reciente a más antiguo
+    historial.slice().reverse().forEach((reg, index) => {
+        let idxReverso = historial.length - 1 - index;
         html += `
             <div style="background:white; padding:10px; margin-bottom:10px; color:black; border-radius:5px; border-left:5px solid #d32f2f;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -227,23 +228,26 @@ function renderHistorial() {
                         <b>${reg.fecha}</b><br>
                         ${reg.info.nombre.toUpperCase()}
                     </div>
-                    <button class="btn btn-blue" style="width:auto; padding:5px 10px; font-size:0.7rem;" onclick="descargarIntervencion(${idx})">EXCEL</button>
+                    <button class="btn btn-blue" style="width:auto; padding:5px 10px; font-size:0.7rem;" onclick="descargarIntervencion(${idxReverso})">EXCEL</button>
                 </div>
             </div>`;
     });
-    document.getElementById('lista-historial').innerHTML = html || "No hay datos.";
+    document.getElementById('lista-historial').innerHTML = html || "No hay intervenciones guardadas.";
 }
 
-function descargarIntervencion(idxReverso) {
+function descargarIntervencion(idx) {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
-    let idxOriginal = historial.length - 1 - idxReverso;
-    let reg = historial[idxOriginal];
+    let reg = historial[idx];
+    if(!reg) return;
 
-    let columnas = ["Fecha", "Intervencion", "Direccion", "Equipo", "Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "P. Entrada", "P. Final", "Consumo bar", "Consumo L/min", "Tiempo Trabajo", "Hora Salida"];
+    let columnas = ["Fecha", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Instantáneo (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55 l/min)", "Prevision Salida (Media)", "Hora Salida"];
+    
     let csvContent = columnas.join(";") + "\n";
 
     reg.equipos.forEach(e => {
+        let consumoBar = e.pE - e.pA;
         let profesionales = e.prof.filter(p => p !== "-").join(" / ");
+
         let fila = [
             reg.fecha,
             reg.info.nombre.replace(/;/g, ","),
@@ -255,9 +259,12 @@ function descargarIntervencion(idxReverso) {
             e.hE,
             e.pE,
             e.pA,
-            (e.pE - e.pA),
+            consumoBar,
             Math.round(e.rMed),
+            Math.round(e.rInst),
             formatTimeMS(e.tAcumuladoPrevio),
+            e.hS55,
+            e.hSMed,
             e.hSalida
         ].join(";");
         csvContent += fila + "\n";
@@ -268,7 +275,7 @@ function descargarIntervencion(idxReverso) {
     let url = URL.createObjectURL(blob);
     let link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `INTERVENCION_${reg.info.nombre.replace(/ /g, "_")}.csv`);
+    link.setAttribute("download", `KONTROL_ERA_${reg.info.nombre.replace(/ /g, "_")}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
