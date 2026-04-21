@@ -50,7 +50,17 @@ function checkActiva() {
 }
 
 function finalizarTodo() {
-    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se limpiará todo el panel. Los datos ya están en el historial.")) {
+    if(confirm("¿FINALIZAR INTERVENCIÓN? Se guardará en el historial y se limpiará el panel.")) {
+        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
+        let registro = {
+            id: Date.now(),
+            info: intervencion,
+            equipos: JSON.parse(JSON.stringify(eqs)), // Copia profunda de los equipos
+            fecha: new Date().toLocaleString()
+        };
+        historial.push(registro);
+        localStorage.setItem('bvg_historial', JSON.stringify(historial));
+
         intervencion = null; eqs = [];
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
@@ -83,10 +93,10 @@ function addEquipo() {
     let ah = Date.now(); let barNum = parseInt(b);
     eqs.push({ 
         n: n, pE: barNum, pA: barNum, prof: p, sit: document.getElementById('sit').value || "---", obj: document.getElementById('obj').value || "---",
-        hE: formatHora(ah), hS55: formatHora(ah + (((barNum-50)*6/55)*60000)), hSMed: "--:--", hSalida: "--:--",
+        hE: formatHora(ah), hS55: formatHora(ah + (((barNum-50)*6/55)*60000)), hSMed: "--:--",
         pSegReg: Math.round((barNum / 2) + 25),
         tI: ah, tU: ah, hUltActualizacion: formatHora(ah),
-        tAcumuladoPrevio: 0, rMed: 0, rInst: 0, autMed: 0, activo: true, alerta: false, silenciado: false, informadoRegreso: false, reactivado: "NO"
+        tAcumuladoPrevio: 0, rMed: 0, rInst: 0, autMed: 0, activo: true, alerta: false, silenciado: false, informadoRegreso: false
     });
     sync(); render();
     ["nom","bar","np1","np2","np3","sit","obj"].forEach(id => document.getElementById(id).value="");
@@ -125,23 +135,28 @@ function render() {
         let cardHtml = `
             <div id="card-${i}" class="card ${e.activo?'':'fuera'} ${e.alerta?'alerta-equipo':''}">
                 <div class="msg-alerta">${msgDisplay}</div>
-                <div class="card-name">${e.n} ${e.reactivado === "SÍ" ? '<small style="font-size:0.8rem; color:#d32f2f;">(REACTIVADO)</small>' : ''}</div>
+                <div class="card-name">${e.n}</div>
                 <div class="n-prof-display">Nº PROF: ${e.prof.filter(p=>p!=="-").join(" | ")}</div>
                 <div class="mision-box">
                     <div><b>LOCALIZACIÓN:</b> ${e.sit.toUpperCase()}</div>
                     <div><b>OBJETIVO:</b> ${e.obj.toUpperCase()}</div>
                 </div>
                 <div class="seccion">
-                    <div class="dato"><span>Hora Entrada / Salida:</span> <span class="val">${e.hE} / ${e.hSalida}</span></div>
-                    <div class="dato"><span>Presión Entrada / Seguridad:</span> <span class="val">${Math.round(e.pE)} bar / ${Math.round(e.pSegReg)} bar</span></div>
+                    <div class="dato"><span>Hora / Presión Entrada:</span> <span class="val">${e.hE} / ${Math.round(e.pE)} bar</span></div>
+                    <div class="dato"><span>Previsión Salida (55 l/min):</span> <span class="val destacado-rojo">${e.hS55}</span></div>
+                    <div class="dato"><span>Previsión Salida (consumo medio):</span> <span class="val destacado-verde">${e.hSMed}</span></div>
+                    <div class="dato"><span>Presión Seguridad Regreso:</span> <span class="val destacado-rojo">${Math.round(e.pSegReg)} bar</span></div>
                 </div>
                 <div class="seccion">
                     <div class="dato"><span>Presión Actual:</span> <span class="val destacado-azul">${Math.round(e.pA)} bar</span></div>
-                    <div class="dato"><span>Tiempo Trabajo Tramo:</span> <span class="val destacado-rojo">${formatTimeMS(e.activo ? (ah - e.tI) : (e.tAcumuladoPrevio))}</span></div>
-                    <div class="dato"><span>Última Actualización:</span> <span class="val">${e.activo ? e.hUltActualizacion : 'PARADO'}</span></div>
+                    <div class="dato"><span>Tiempo Trabajo Actual:</span> <span class="val">${formatTimeMS(tAct)}</span></div>
+                    <div class="dato"><span>Tiempo Trabajo Total:</span> <span class="val destacado-rojo">${formatTimeMS(e.activo ? (ah - e.tI + e.tAcumuladoPrevio) : e.tAcumuladoPrevio)}</span></div>
+                    <div class="dato"><span>Última Actualización Presión:</span> <span class="val">${e.activo ? e.hUltActualizacion : 'PARADO'}</span></div>
                 </div>
                 <div class="seccion">
                     <div class="dato"><span>Consumo Medio:</span> <span class="val">${Math.round(e.rMed)} l/min</span></div>
+                    <div class="dato"><span>Consumo Instantáneo:</span> <span class="val destacado-azul">${Math.round(e.rInst)} l/min</span></div>
+                    <div class="dato"><span>Autonomía (55 l/min):</span> <span class="val destacado-rojo">${e.pA<=50?'SALIDA':Math.round(((e.pA-50)*6)/55)+' min'}</span></div>
                     <div class="dato"><span>Autonomía Media:</span> <span class="val destacado-verde">${e.pA<=50?'SALIDA':(e.rMed>0?Math.round(e.autMed)+' min':'--')}</span></div>
                 </div>
                 ${e.activo ? `
@@ -149,7 +164,7 @@ function render() {
                     ${e.alerta ? `<button class="btn btn-silence" onclick="eqs[${i}].silenciado=true;render();">SILENCIAR ALARMA</button>` : ''}
                     <button class="btn btn-dark" onclick="setEstado(${i}, false)">FIN EQUIPO (SALIDA)</button>
                 ` : `
-                    <button class="btn btn-blue" style="background:#28a745" onclick="reactivarEquipo(${i})">RE-ACTIVAR (NUEVA MISIÓN)</button>
+                    <button class="btn btn-blue" style="background:#28a745" onclick="reactivarEquipo(${i})">RE-ACTIVAR</button>
                 `}
             </div>`;
         if(e.activo) hZ += cardHtml; else hF += cardHtml;
@@ -162,43 +177,15 @@ function render() {
     if (cV) { tB.className = 'global-alerta'; tB.innerText = '¡CONTROL PENDIENTE!'; if (cS && ah % 2000 < 1000) playAlertSound(); } else { tB.className = ''; tB.innerText = ''; }
 }
 
-function setEstado(i, activo) { 
-    if (!activo) {
-        let ah = Date.now();
-        eqs[i].hSalida = formatHora(ah);
-        eqs[i].activo = false;
-        
-        // Guardar automáticamente este tramo en el historial
-        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
-        historial.push({
-            id: Date.now(),
-            info: intervencion,
-            equipo_foto: JSON.parse(JSON.stringify(eqs[i])),
-            fecha: new Date().toLocaleString()
-        });
-        localStorage.setItem('bvg_historial', JSON.stringify(historial));
-    }
-    sync(); render(); 
-}
+function setEstado(i, activo) { if (!activo) eqs[i].tAcumuladoPrevio += (Date.now() - eqs[i].tI); eqs[i].activo = activo; eqs[i].alerta = false; eqs[i].silenciado = false; eqs[i].informadoRegreso = false; sync(); render(); }
 
 function reactivarEquipo(i) {
-    let b = prompt(`Bares Entrada para nueva misión:`, Math.round(eqs[i].pA));
+    let b = prompt(`Bares Entrada:`, Math.round(eqs[i].pA));
     if(b) {
-        let ah = Date.now();
-        eqs[i].pE = eqs[i].pA = parseInt(b); 
-        eqs[i].tI = ah; 
-        eqs[i].tU = ah; 
-        eqs[i].hE = formatHora(ah);
-        eqs[i].hSalida = "--:--";
+        let ah = Date.now(); eqs[i].pE = eqs[i].pA = parseInt(b); eqs[i].tI = ah; eqs[i].tU = ah; eqs[i].hE = formatHora(ah);
         eqs[i].hUltActualizacion = formatHora(ah);
         eqs[i].pSegReg = Math.round((parseInt(b) / 2) + 25);
-        eqs[i].activo = true; 
-        eqs[i].alerta = false; 
-        eqs[i].silenciado = false; 
-        eqs[i].informadoRegreso = false;
-        eqs[i].reactivado = "SÍ"; 
-        eqs[i].hS55 = formatHora(ah + (((parseInt(b)-50)*6/55)*60000)); 
-        sync(); render();
+        eqs[i].activo = true; eqs[i].alerta = false; eqs[i].silenciado = false; eqs[i].informadoRegreso = false; eqs[i].hS55 = formatHora(ah + (((parseInt(b)-50)*6/55)*60000)); sync(); render();
     }
 }
 
@@ -251,15 +238,14 @@ function renderHistorial() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
     let html = "";
     historial.slice().reverse().forEach(reg => {
-        let e = reg.equipo_foto;
         html += `
             <div style="background:white; padding:10px; margin-bottom:5px; border-left:5px solid red; font-size:0.8rem; color:#000;">
-                <b>${reg.fecha}</b> - ${e.n} [ENTRADA: ${e.hE} / SALIDA: ${e.hSalida}]<br>
-                OBJETIVO: ${e.obj} / REACTIVADO: ${e.reactivado}
+                <b>${reg.fecha}</b> - ${reg.info.nombre.toUpperCase()}<br>
+                ${reg.equipos.length} binomios registrados.
             </div>
         `;
     });
-    document.getElementById('lista-historial').innerHTML = html || "No hay registros.";
+    document.getElementById('lista-historial').innerHTML = html || "No hay intervenciones guardadas.";
 }
 
 function exportarTodoCSV() {
@@ -268,36 +254,34 @@ function exportarTodoCSV() {
 
     let columnas = [
         "Fecha Registro", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", 
-        "Localizacion", "Objetivo", "Hora Entrada", "Hora Salida", "Presion Entrada (bar)", 
-        "Presion Salida (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", 
-        "Tiempo Trabajo Tramo", "Reactivado"
+        "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", 
+        "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Inst. (l/min)", 
+        "Tiempo Trabajo Total", "Prevision Salida (55 l/min)", "Prevision Salida (Media)"
     ];
 
     let csvContent = columnas.join(";") + "\n";
 
     historial.forEach(reg => {
-        let e = reg.equipo_foto;
-        let consumoBar = e.pE - e.pA;
-        let profesionales = e.prof.filter(p => p !== "-").join(" / ");
+        reg.equipos.forEach(e => {
+            let consumoBar = e.pE - e.pA;
+            let tiempoTotal = e.activo ? (Date.now() - e.tI + e.tAcumuladoPrevio) : e.tAcumuladoPrevio;
+            let tiempoTexto = formatTimeMS(tiempoTotal);
+            let profesionales = e.prof.filter(p => p !== "-").join(" / ");
 
-        let fila = [
-            reg.fecha,
-            reg.info.nombre.replace(/;/g, ","),
-            reg.info.direccion.replace(/;/g, ","),
-            e.n.replace(/;/g, ","),
-            profesionales,
-            e.sit.replace(/;/g, ","),
-            e.obj.replace(/;/g, ","),
-            e.hE,
-            e.hSalida,
-            e.pE,
-            e.pA,
-            consumoBar,
-            Math.round(e.rMed),
-            formatTimeMS(reg.id - e.tI),
-            e.reactivado
-        ].join(";");
-        csvContent += fila + "\n";
+            let fila = [
+                reg.fecha,
+                reg.info.nombre.replace(/;/g, ","),
+                reg.info.direccion.replace(/;/g, ","),
+                e.n.replace(/;/g, ","),
+                profesionales,
+                e.sit.replace(/;/g, ","),
+                e.obj.replace(/;/g, ","),
+                e.hE, e.pE, e.pA, consumoBar,
+                Math.round(e.rMed), Math.round(e.rInst),
+                tiempoTexto, e.hS55, e.hSMed
+            ].join(";");
+            csvContent += fila + "\n";
+        });
     });
 
     let BOM = "\uFEFF";
