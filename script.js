@@ -50,13 +50,25 @@ function checkActiva() {
 }
 
 function finalizarTodo() {
-    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se limpiará todo el panel.")) {
-        intervencion = null; eqs = [];
+    if(confirm("¿FINALIZAR INTERVENCIÓN TOTAL? Se guardará en el historial y se limpiará el panel.")) {
+        // Guardamos la intervención completa antes de borrar
+        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
+        historial.push({
+            id: Date.now(),
+            info: intervencion,
+            equipos: JSON.parse(JSON.stringify(eqs)),
+            fecha: new Date().toLocaleString()
+        });
+        localStorage.setItem('bvg_historial', JSON.stringify(historial));
+
+        // Limpieza
+        intervencion = null; 
+        eqs = [];
         localStorage.removeItem('bvg_int_data');
         localStorage.removeItem('eq_bvg_timer_fix');
         
-        // Corrección: Recarga la página para volver al inicio
-        location.reload(); 
+        // Retorno al inicio
+        window.location.href = window.location.pathname;
     }
 }
 
@@ -149,15 +161,7 @@ function setEstado(i, activo) {
         eqs[i].hSalida = formatHora(ahora); 
         eqs[i].tAcumuladoPrevio += (ahora - eqs[i].tI);
         eqs[i].activo = activo;
-
-        let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
-        historial.push({
-            id: Date.now(),
-            info: intervencion,
-            equipos: [JSON.parse(JSON.stringify(eqs[i]))],
-            fecha: new Date().toLocaleString()
-        });
-        localStorage.setItem('bvg_historial', JSON.stringify(historial));
+        eqs[i].alerta = false;
     } else {
         eqs[i].activo = activo;
     }
@@ -215,56 +219,56 @@ function toggleHistorial() {
 function renderHistorial() {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
     let html = "";
-    historial.slice().reverse().forEach(reg => {
-        html += `<div style="background:white; padding:5px; margin-bottom:5px; color:black; font-size:0.8rem;"><b>${reg.fecha}</b> - ${reg.info.nombre.toUpperCase()}</div>`;
+    historial.slice().reverse().forEach((reg, idx) => {
+        html += `
+            <div style="background:white; padding:10px; margin-bottom:10px; color:black; border-radius:5px; border-left:5px solid #d32f2f;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <b>${reg.fecha}</b><br>
+                        ${reg.info.nombre.toUpperCase()}
+                    </div>
+                    <button class="btn btn-blue" style="width:auto; padding:5px 10px; font-size:0.7rem;" onclick="descargarIntervencion(${idx})">EXCEL</button>
+                </div>
+            </div>`;
     });
     document.getElementById('lista-historial').innerHTML = html || "No hay datos.";
 }
 
-function exportarTodoCSV() {
+function descargarIntervencion(idxReverso) {
     let historial = JSON.parse(localStorage.getItem('bvg_historial')) || [];
-    if(historial.length === 0) return alert("No hay datos para exportar");
+    let idxOriginal = historial.length - 1 - idxReverso;
+    let reg = historial[idxOriginal];
 
-    let columnas = ["Fecha Registro", "Intervencion", "Direccion", "Nombre Equipo", "Nº Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "Presion Entrada (bar)", "Presion Final (bar)", "Consumo Real (bar)", "Consumo Medio (l/min)", "Consumo Instantáneo (l/min)", "Tiempo Trabajo Total", "Prevision Salida (55 l/min)", "Prevision Salida (Media)", "Hora Salida"];
-    
+    let columnas = ["Fecha", "Intervencion", "Direccion", "Equipo", "Profesionales", "Localizacion", "Objetivo", "Hora Entrada", "P. Entrada", "P. Final", "Consumo bar", "Consumo L/min", "Tiempo Trabajo", "Hora Salida"];
     let csvContent = columnas.join(";") + "\n";
 
-    historial.forEach(reg => {
-        reg.equipos.forEach(e => {
-            let consumoBar = e.pE - e.pA;
-            let profesionales = e.prof.filter(p => p !== "-").join(" / ");
-
-            let fila = [
-                reg.fecha,
-                reg.info.nombre.replace(/;/g, ","),
-                reg.info.direccion.replace(/;/g, ","),
-                e.n.replace(/;/g, ","),
-                profesionales,
-                e.sit.replace(/;/g, ","),
-                e.obj.replace(/;/g, ","),
-                e.hE,
-                e.pE,
-                e.pA,
-                consumoBar,
-                Math.round(e.rMed),
-                Math.round(e.rInst),
-                formatTimeMS(e.tAcumuladoPrevio),
-                e.hS55,
-                e.hSMed,
-                e.hSalida
-            ].join(";");
-            csvContent += fila + "\n";
-        });
+    reg.equipos.forEach(e => {
+        let profesionales = e.prof.filter(p => p !== "-").join(" / ");
+        let fila = [
+            reg.fecha,
+            reg.info.nombre.replace(/;/g, ","),
+            reg.info.direccion.replace(/;/g, ","),
+            e.n.replace(/;/g, ","),
+            profesionales,
+            e.sit.replace(/;/g, ","),
+            e.obj.replace(/;/g, ","),
+            e.hE,
+            e.pE,
+            e.pA,
+            (e.pE - e.pA),
+            Math.round(e.rMed),
+            formatTimeMS(e.tAcumuladoPrevio),
+            e.hSalida
+        ].join(";");
+        csvContent += fila + "\n";
     });
 
     let BOM = "\uFEFF";
     let blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     let url = URL.createObjectURL(blob);
     let link = document.createElement("a");
-    let f = new Date();
-    let fechaStr = `${f.getFullYear()}${f.getMonth()+1}${f.getDate()}_${f.getHours()}${f.getMinutes()}`;
     link.setAttribute("href", url);
-    link.setAttribute("download", `PARTE_INTERVENCION_${fechaStr}.csv`);
+    link.setAttribute("download", `INTERVENCION_${reg.info.nombre.replace(/ /g, "_")}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
