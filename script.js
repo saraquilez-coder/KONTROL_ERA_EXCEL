@@ -87,22 +87,49 @@ function formatHora(f) {
 
 function formatTimeMS(ms) { return Math.floor(ms/60000) + "m " + Math.floor((ms%60000)/1000) + "s"; }
 
+
 function addEquipo() {
     initAudio();
-    let n = document.getElementById('nom').value; let b = document.getElementById('bar').value;
+    let n = document.getElementById('nom').value; 
+    let b = document.getElementById('bar').value;
     if(!n || !b) return;
-    let p = [document.getElementById('np1').value || "-", document.getElementById('np2').value || "-", document.getElementById('np3').value || "-"];
-    let ah = Date.now(); let barNum = parseInt(b);
+
+    let p = [
+        document.getElementById('np1').value || "-", 
+        document.getElementById('np2').value || "-", 
+        document.getElementById('np3').value || "-"
+    ];
+    
+    let ah = Date.now(); 
+    let barNum = parseInt(b);
+
     eqs.push({ 
-        n: n, pE: barNum, pA: barNum, prof: p, sit: document.getElementById('sit').value || "---", obj: document.getElementById('obj').value || "---",
-        hE: formatHora(ah), hS55: formatHora(ah + (((barNum-50)*6/55)*60000)), hSMed: "--:--", hSalida: "--:--",
+        n: n, pE: barNum, pA: barNum, prof: p, 
+        sit: document.getElementById('sit').value || "---", 
+        obj: document.getElementById('obj').value || "---",
+        hE: formatHora(ah), 
+        hS55: formatHora(ah + (((barNum-50)*6/55)*60000)), 
+        hSMed: "--:--", 
+        hSalida: "--:--",
         pSegReg: Math.round((barNum / 2) + 25),
-        tI: ah, tU: ah, tAcumuladoPrevio: 0, rMed: 0, rInst: 0, autMed: 0, activo: true, alerta: false, silenciado: false, informadoRegreso: false,
-        tramos: [] // <--- NUEVO: Aquí se guardarán las filas del Excel
+        tI: ah, 
+        tU: ah, 
+        hUltActualizacion: formatHora(ah), // <--- ESTA LÍNEA ARREGLA EL UNDEFINED
+        tAcumuladoPrevio: 0, 
+        rMed: 0,  
+        autMed: 0, 
+        activo: true, 
+        alerta: false, 
+        silenciado: false, 
+        informadoRegreso: false,
+        tramos: [] 
     });
-    sync(); render();
+
+    sync(); 
+    render();
     ["nom","bar","np1","np2","np3","sit","obj"].forEach(id => document.getElementById(id).value="");
 }
+
 
 function render() {
     if(!intervencion) return;
@@ -131,8 +158,8 @@ function render() {
 
         let msgDisplay = "¡REVISIÓN REQUERIDA!";
         if (alertaMinutos) msgDisplay = `ACTUALIZACIÓN DE PRESIÓN ${minT} MINUTOS TRABAJO`;
-        if (avisoRegreso) msgDisplay = "¡AVISO! PRESIÓN DE REGRESO ALCANZADA (INFORMAR EQUIPO)";
-        if (e.pA <= 50) msgDisplay = "¡ALERTA! EQUIPO EN RESERVA - SALIDA INMEDIATA";
+        if (avisoRegreso) msgDisplay = "¡AVISO! PRESIÓN DE REGRESO ALCANZADA (INFORMAR A EQUIPO)";
+        if (e.pA <= 50) msgDisplay = "¡ALERTA! EQUIPO PRÓXIMO A RESERVA - SALIDA INMEDIATA";
 
         let cardHtml = `
             <div id="card-${i}" class="card ${e.activo?'':'fuera'} ${e.alerta?'alerta-equipo':''}">
@@ -157,9 +184,8 @@ function render() {
                 </div>
                 <div class="seccion">
                     <div class="dato"><span>Consumo Medio:</span> <span class="val">${Math.round(e.rMed)} l/min</span></div>
-                    <div class="dato"><span>Consumo Instantáneo:</span> <span class="val destacado-azul">${Math.round(e.rInst)} l/min</span></div>
                     <div class="dato"><span>Autonomía (55 l/min):</span> <span class="val destacado-rojo">${e.pA<=50?'SALIDA':Math.round(((e.pA-50)*6)/55)+' min'}</span></div>
-                    <div class="dato"><span>Autonomía Media:</span> <span class="val destacado-verde">${e.pA<=50?'SALIDA':(e.rMed>0?Math.round(e.autMed)+' min':'--')}</span></div>
+                    <div class="dato"><span>Autonomía Consumo Medio:</span> <span class="val destacado-verde">${e.pA<=50?'SALIDA':(e.rMed>0?Math.round(e.autMed)+' min':'--')}</span></div>
                 </div>
                 ${e.activo ? `
                     <button class="btn btn-orange" onclick="showModal(${i})">ACTUALIZAR DATOS</button>
@@ -174,8 +200,7 @@ function render() {
 
     document.getElementById('quick-access').innerHTML = hJump;
     document.getElementById('L_ZONA').innerHTML = hZ;
-    // Localiza esta línea y cámbiala por la siguiente:
-document.getElementById('L_FUERA').innerHTML = hF != "" ? `
+    document.getElementById('L_FUERA').innerHTML = hF != "" ? `
     <div class="separador" style="
         background-color: #28a745; 
         color: white; 
@@ -190,6 +215,8 @@ document.getElementById('L_FUERA').innerHTML = hF != "" ? `
     </div>${hF}` : "";
     let tB = document.getElementById('timer-box');
     if (cV) { tB.className = 'global-alerta'; tB.innerText = '¡CONTROL PENDIENTE!'; if (cS && ah % 2000 < 1000) playAlertSound(); } else { tB.className = ''; tB.innerText = ''; }
+
+    
 }
 
 function setEstado(i, activo) { 
@@ -204,31 +231,91 @@ function setEstado(i, activo) {
         eqs[i].tramos.push(JSON.parse(JSON.stringify(eqs[i])));
     }
     sync(); render(); 
+
+    {
+   
+    // --- BLOQUE DEL BOTÓN FINALIZAR ---
+    // Intentamos buscar si ya existe el contenedor del botón
+    let zonaBoton = document.getElementById('contenedor-fijo-finalizar');
+    
+    // Si no existe en el HTML, lo creamos nosotros por código ahora mismo
+    if (!zonaBoton) {
+        zonaBoton = document.createElement('div');
+        zonaBoton.id = 'contenedor-fijo-finalizar';
+        document.body.appendChild(zonaBoton); // Lo pegamos al final de la página
+    }
+
+    // Lógica para mostrarlo solo si hay equipos
+    if (eqs && eqs.length > 0) {
+        zonaBoton.innerHTML = `
+            <div style="margin: 50px 15px 30px 15px; text-align: center;">
+                <button class="btn btn-reset" onclick="finalizarTodo()" 
+                    style="background-color: #d32f2f !important; 
+                           width: 100%; 
+                           height: 65px; 
+                           font-weight: bold; 
+                           font-size: 1.2rem; 
+                           color: white;
+                           border: 3px solid #ffffff; 
+                           border-radius: 12px; 
+                           box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+                           cursor: pointer;
+                           display: block;">
+                    FINALIZAR INTERVENCIÓN Y GUARDAR
+                </button>
+            </div>`;
+    } else {
+        // Si estamos en la pantalla de inicio (0 equipos), lo borramos
+        zonaBoton.innerHTML = "";
+    }
 }
+ 
+
+}
+
+// function reactivarEquipo(i) {
+//     let b = prompt(`Bares Entrada:`, Math.round(eqs[i].pA));
+//     if(b) {
+//         let ah = Date.now();
+//         let barNum = parseInt(b);
+        
+//         // Sincronizamos presiones y tiempos
+//         eqs[i].pE = eqs[i].pA = barNum;
+//         eqs[i].tI = ah; 
+//         eqs[i].tU = ah; 
+//         eqs[i].hE = formatHora(ah);
+//         eqs[i].hUltActualizacion = formatHora(ah);
+//         eqs[i].hSalida = "--:--";
+        
+//         // Recalculamos parámetros de seguridad
+//         eqs[i].pSegReg = Math.round((barNum / 2) + 25);
+//         eqs[i].hS55 = formatHora(ah + (((barNum - 50) * 6 / 55) * 60000));
+        
+//         // MANTENEMOS el tAcumuladoPrevio (no se resetea a 0)
+//         eqs[i].activo = true; 
+//         eqs[i].alerta = false; 
+//         eqs[i].silenciado = false; 
+//         eqs[i].informadoRegreso = false; 
+        
+//         sync(); 
+//         render();
+//     }
+// }
 
 function reactivarEquipo(i) {
     let b = prompt(`Bares Entrada:`, Math.round(eqs[i].pA));
     if(b) {
         let ah = Date.now();
-        let barNum = parseInt(b);
-        
-        // Sincronizamos presiones y tiempos
-        eqs[i].pE = eqs[i].pA = barNum;
+        eqs[i].pE = eqs[i].pA = parseInt(b);
         eqs[i].tI = ah; 
         eqs[i].tU = ah; 
         eqs[i].hE = formatHora(ah);
-        eqs[i].hUltActualizacion = formatHora(ah);
+        eqs[i].hUltActualizacion = formatHora(ah); // Reiniciamos hora de actualización
         eqs[i].hSalida = "--:--";
-        
-        // Recalculamos parámetros de seguridad
-        eqs[i].pSegReg = Math.round((barNum / 2) + 25);
-        eqs[i].hS55 = formatHora(ah + (((barNum - 50) * 6 / 55) * 60000));
-        
-        // MANTENEMOS el tAcumuladoPrevio (no se resetea a 0)
         eqs[i].activo = true; 
-        eqs[i].alerta = false; 
-        eqs[i].silenciado = false; 
-        eqs[i].informadoRegreso = false; 
+        eqs[i].informadoRegreso = false;
+        
+        // NO ponemos tAcumuladoPrevio a cero para que el tiempo total no se borre
         
         sync(); 
         render();
@@ -271,46 +358,46 @@ function showModal(i) {
 
 function hideModal() { document.getElementById('modal').style.display='none'; }
 
-function saveData() {
-    let b = document.getElementById('nB').value;
-    if (b !== "" && idS !== -1) {
-        let ah = Date.now(); 
-        let v = parseInt(b);
-        let e = eqs[idS];
+// function saveData() {
+//     let b = document.getElementById('nB').value;
+//     if (b !== "" && idS !== -1) {
+//         let ah = Date.now(); 
+//         let v = parseInt(b);
+//         let e = eqs[idS];
         
-        // Actualizar check de información
-        e.informadoRegreso = document.getElementById('checkInformado').checked;
+//         // Actualizar check de información
+//         e.informadoRegreso = document.getElementById('checkInformado').checked;
 
-        // CÁLCULO DE DATOS (Solo si cambias la presión)
-        if (v !== e.pA) {
-            let tTotal = (ah - e.tI) / 60000;
-            if (tTotal > 0.1) {
-                e.rMed = ((e.pE - v) * 6) / tTotal;
-                if (e.rMed > 0) {
-                    e.autMed = ((v - 50) * 6) / e.rMed;
-                    e.hSMed = formatHora(ah + (e.autMed * 60000));
-                }
-            }
-            e.rInst = ((e.pA - v) * 6) / ((ah - e.tU) / 60000);
-            e.tU = ah; 
-            e.pA = v;
-        }
+//         // CÁLCULO DE DATOS (Solo si cambias la presión)
+//         if (v !== e.pA) {
+//             let tTotal = (ah - e.tI) / 60000;
+//             if (tTotal > 0.1) {
+//                 e.rMed = ((e.pE - v) * 6) / tTotal;
+//                 if (e.rMed > 0) {
+//                     e.autMed = ((v - 50) * 6) / e.rMed;
+//                     e.hSMed = formatHora(ah + (e.autMed * 60000));
+//                 }
+//             }
+//             e.rInst = ((e.pA - v) * 6) / ((ah - e.tU) / 60000);
+//             e.tU = ah; 
+//             e.pA = v;
+//         }
 
-        // CAMBIAR LOS INTERVINIENTES 
-        e.prof = [
-            document.getElementById('nnp1').value || "-",
-            document.getElementById('nnp2').value || "-",
-            document.getElementById('nnp3').value || "-"
-        ];
+//         // CAMBIAR LOS INTERVINIENTES 
+//         e.prof = [
+//             document.getElementById('nnp1').value || "-",
+//             document.getElementById('nnp2').value || "-",
+//             document.getElementById('nnp3').value || "-"
+//         ];
 
-        e.sit = document.getElementById('nSit').value; 
-        e.obj = document.getElementById('nObj').value;
+//         e.sit = document.getElementById('nSit').value; 
+//         e.obj = document.getElementById('nObj').value;
         
-        hideModal(); 
-        sync(); 
-        render();
-    }
-}
+//         hideModal(); 
+//         sync(); 
+//         render();
+//     }
+// }
 
 
 // function saveData() {
@@ -345,6 +432,105 @@ function saveData() {
 //         hideModal(); sync(); render();
 //     }
 // }
+
+// function saveData() {
+//     let b = document.getElementById('nB').value;
+//     if (b !== "" && idS !== -1) {
+//         let ah = Date.now(); 
+//         let v = parseInt(b);
+//         let e = eqs[idS];
+
+//         // 1. Actualizamos la hora de actualización SIEMPRE
+//         e.hUltActualizacion = formatHora(ah); 
+//         e.tU = ah; 
+
+//         // 2. Cálculos de consumo (Solo si cambia la presión)
+//         if (v !== e.pA) {
+//             let tTotal = (ah - e.tI) / 60000;
+//             if (tTotal > 0.1) {
+//                 e.rMed = ((e.pE - v) * 6) / tTotal;
+//                 if (e.rMed > 0) {
+//                     e.autMed = ((v - 50) * 6) / e.rMed;
+//                     e.hSMed = formatHora(ah + (e.autMed * 60000));
+//                 }
+//             }
+//             e.rInst = ((e.pA - v) * 6) / ((ah - e.tU) / 60000);
+//             e.pA = v;
+//         }
+
+//         // 3. ACTUALIZAR ESTADO DE ALARMA
+//         // Leemos si el checkbox está marcado
+//         e.informadoRegreso = document.getElementById('checkInformado').checked;
+        
+//         if (e.informadoRegreso) {
+//             e.alerta = false;   // Apagamos la alerta visual (rojo)
+//             e.silenciado = true; // Apagamos el sonido
+//         }
+
+//         // 4. Guardar los nombres de los intervinientes (NP1, NP2, NP3)
+//         e.prof = [
+//             document.getElementById('nnp1').value || "-",
+//             document.getElementById('nnp2').value || "-",
+//             document.getElementById('nnp3').value || "-"
+//         ];
+
+//         e.sit = document.getElementById('nSit').value; 
+//         e.obj = document.getElementById('nObj').value;
+        
+//         hideModal(); 
+//         sync(); 
+//         render();
+//     }
+// }
+
+function saveData() {
+    let b = document.getElementById('nB').value;
+    if (b !== "" && idS !== -1) {
+        let ah = Date.now(); 
+        let v = parseInt(b);
+        let e = eqs[idS];
+
+        // 1. Actualizamos la hora de actualización SIEMPRE
+        e.hUltActualizacion = formatHora(ah); 
+        e.tU = ah; 
+
+        // 2. Cálculos de consumo (Solo si cambia la presión)
+        if (v !== e.pA) {
+            let tTotal = (ah - e.tI) / 60000;
+            if (tTotal > 0.1) {
+                e.rMed = ((e.pE - v) * 6) / tTotal;
+                if (e.rMed > 0) {
+                    e.autMed = ((v - 50) * 6) / e.rMed;
+                    e.hSMed = formatHora(ah + (e.autMed * 60000));
+                }
+            }
+            // HE ELIMINADO LA LÍNEA DE e.rInst QUE ESTABA AQUÍ
+            e.pA = v;
+        }
+
+        // 3. ACTUALIZAR ESTADO DE ALARMA
+        e.informadoRegreso = document.getElementById('checkInformado').checked;
+        
+        if (e.informadoRegreso) {
+            e.alerta = false;   
+            e.silenciado = true; 
+        }
+
+        // 4. Guardar los nombres de los intervinientes (NP1, NP2, NP3)
+        e.prof = [
+            document.getElementById('nnp1').value || "-",
+            document.getElementById('nnp2').value || "-",
+            document.getElementById('nnp3').value || "-"
+        ];
+
+        e.sit = document.getElementById('nSit').value; 
+        e.obj = document.getElementById('nObj').value;
+        
+        hideModal(); 
+        sync(); 
+        render();
+    }
+}
 
 function sync() { localStorage.setItem('eq_bvg_timer_fix', JSON.stringify(eqs)); }
 
